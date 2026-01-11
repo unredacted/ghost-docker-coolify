@@ -1,0 +1,37 @@
+name: Sync and Patch
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Save workflow files
+        run: cp -r .github /tmp/.github-backup
+
+      - name: Sync upstream
+        run: |
+          git remote add upstream https://github.com/TryGhost/ghost-docker.git || true
+          git fetch upstream
+          git reset --hard upstream/main
+
+      - name: Restore workflow files
+        run: cp -r /tmp/.github-backup/* .github/
+
+      - name: Patch compose.yml
+        run: python3 .github/scripts/patch.py
+
+      - name: Commit and push
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add -A
+          git diff --staged --quiet || git commit -m "Auto-patch compose.yml for Coolify compatibility"
+          git push --force
