@@ -18,9 +18,9 @@ cd "$SCRATCH"
 echo "→ fetching upstream"
 curl -fsSL https://raw.githubusercontent.com/TryGhost/ghost-docker/main/compose.yml -o compose.yml
 curl -fsSL https://raw.githubusercontent.com/TryGhost/ghost-docker/main/.env.example -o .env.example
-mkdir -p caddy/snippets
+mkdir -p caddy/snippets .github
 touch caddy/Caddyfile.example caddy/snippets/Logging .env
-cp "$REPO_ROOT/README.coolify.md" .
+cp "$REPO_ROOT/.github/README.coolify.md" .github/
 cp "$REPO_ROOT/.github/scripts/patch.py" .
 
 echo "→ run 1: apply patch"

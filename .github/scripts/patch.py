@@ -217,9 +217,10 @@ def patch_env_example() -> None:
 
 
 def overwrite_readme() -> None:
-    src = pathlib.Path("README.coolify.md")
-    if src.exists():
-        pathlib.Path("README.md").write_text(src.read_text())
+    src = pathlib.Path(".github/README.coolify.md")
+    if not src.exists():
+        fail(f"{src} missing — the sync workflow should back it up under .github/")
+    pathlib.Path("README.md").write_text(src.read_text())
 
 
 def main() -> None:
