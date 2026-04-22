@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Test patch.py against a fresh upstream checkout.
+#
+# Mimics what the nightly sync workflow does: fetch upstream compose.yml +
+# .env.example, apply patch.py, validate the output with `docker compose
+# config`, then re-apply to assert idempotency.
+#
+# Run locally (from repo root) or in CI. Exits non-zero on any failure.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+SCRATCH="$(mktemp -d)"
+trap 'rm -rf "$SCRATCH"' EXIT
+
+cd "$SCRATCH"
+
+echo "→ fetching upstream"
+curl -fsSL https://raw.githubusercontent.com/TryGhost/ghost-docker/main/compose.yml -o compose.yml
+curl -fsSL https://raw.githubusercontent.com/TryGhost/ghost-docker/main/.env.example -o .env.example
+mkdir -p caddy/snippets
+touch caddy/Caddyfile.example caddy/snippets/Logging .env
+cp "$REPO_ROOT/README.coolify.md" .
+cp "$REPO_ROOT/.github/scripts/patch.py" .
+
+echo "→ run 1: apply patch"
+python3 patch.py
+
+echo "→ validate: docker compose config"
+docker compose -f compose.yml config --quiet
+
+echo "→ assert SERVICE_URL declarations present"
+grep -q 'SERVICE_URL_GHOST_2368: ""' compose.yml
+grep -q 'SERVICE_URL_ANALYTICS_3000: ""' compose.yml
+grep -q 'SERVICE_URL_ACTIVITYPUB_8080: ""' compose.yml
+
+echo "→ assert Ghost healthcheck injected"
+grep -q 'localhost:2368/ghost/api/admin/site' compose.yml
+
+echo "→ assert ADMIN_DOMAIN kept upstream :+ conditional"
+# shellcheck disable=SC2016  # literal compose syntax, no shell expansion wanted
+grep -qF '${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}' compose.yml
+
+assert_absent() {
+  if grep -qE "$1" compose.yml; then
+    echo "unexpected match for /$1/ in compose.yml" >&2
+    exit 1
+  fi
+}
+
+echo "→ assert DOMAIN and DATABASE_* refs gone from compose.yml"
+assert_absent '\$\{DOMAIN(:[^}]*)?\}'
+assert_absent 'DATABASE_PASSWORD'
+assert_absent 'DATABASE_ROOT_PASSWORD'
+assert_absent 'DATABASE_USER'
+
+echo "→ assert caddy/ deleted"
+[ ! -e caddy ]
+
+echo "→ assert README.md overwritten with Coolify content"
+head -1 README.md | grep -q 'Ghost on Coolify'
+
+echo "→ run 2: idempotency"
+cp compose.yml compose.r1.yml
+cp .env.example env.r1
+python3 patch.py
+diff -u compose.r1.yml compose.yml
+diff -u env.r1 .env.example
+
+echo ""
+echo "✓ all checks passed"

@@ -4,92 +4,123 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a comprehensive Docker Compose setup for running Ghost CMS in production with automatic HTTPS, optional analytics, and ActivityPub support. The repository orchestrates multiple services including Ghost, MySQL, Caddy (reverse proxy), and optional Tinybird analytics and ActivityPub federation.
+Ghost 6 CMS packaged for one-shot deploys on [Coolify](https://coolify.io).
+Forked from `TryGhost/ghost-docker` and synced nightly; Coolify-specific
+edits live in [`.github/scripts/patch.py`](.github/scripts/patch.py) and are
+re-applied on top of each upstream pull.
+
+Coolify's built-in Traefik handles HTTPS and routing, so the Caddy service
+from upstream is stripped by the patch. Ghost URL and MySQL credentials use
+Coolify's `SERVICE_URL_*` / `SERVICE_USER_*` / `SERVICE_PASSWORD_*` magic
+variables, which Coolify auto-generates and wires through the UI.
 
 ## Architecture
 
-The project uses Docker Compose to orchestrate these services:
+Services in `compose.yml` after patching:
 
-1. **Ghost** - The main CMS application (runs on internal port 2368)
-2. **MySQL** - Database backend with health checks and support for multiple databases
-3. **Caddy** - Reverse proxy handling HTTPS/SSL, routing, and external access
-4. **Traffic Analytics** (optional profile) - Tinybird integration for web analytics
-5. **ActivityPub** (optional profile) - Federated social networking support
-6. **Supporting services** - Tinybird setup tools and ActivityPub migrations
+1. **ghost** — Ghost CMS, port 2368 internal. Proxy wiring via
+   `SERVICE_URL_GHOST_2368` declaration; referenced as `$SERVICE_URL_GHOST`.
+2. **db** — MySQL 8.0 (pinned, Renovate restricted to `~8.0`). Credentials
+   from `SERVICE_USER_MYSQL`, `SERVICE_PASSWORD_MYSQL`, `SERVICE_PASSWORD_MYSQLROOT`.
+3. **traffic-analytics** (profile `analytics`) — Tinybird proxy on port 3000.
+   Proxy via `SERVICE_URL_ANALYTICS_3000`.
+4. **activitypub** (profile `activitypub`) — Federation service on port 8080.
+   Proxy via `SERVICE_URL_ACTIVITYPUB_8080`.
+5. Supporting one-shot services: `tinybird-login`, `tinybird-sync`,
+   `tinybird-deploy`, `activitypub-migrate`.
 
-Services communicate internally via Docker networks. Caddy handles all external traffic routing including special paths for analytics (`/_tinybird`) and ActivityPub (`/.well-known/`, `/activitypub/`).
+Internal DNS on the `ghost_network` bridge: `ghost` → `db:3306`,
+`activitypub` → `db:3306`. External ingress is Coolify's responsibility; this
+repo does not ship a reverse proxy.
 
 ## Common Commands
 
 ```bash
-# Core operations
-docker compose up -d                    # Start Ghost + MySQL + Caddy
-docker compose down                     # Stop all services
-docker compose logs -f [service]        # View logs (e.g., ghost, mysql, caddy)
-docker compose ps                       # Check service status
-docker compose pull                     # Update all images
-docker compose restart ghost            # Restart just Ghost
+# Core (Coolify runs these under the hood; equivalents for local debugging)
+docker compose up -d
+docker compose down
+docker compose logs -f ghost
+docker compose ps
+docker compose pull
+docker compose restart ghost
 
-# With optional profiles
-docker compose --profile=analytics up -d     # Include analytics services
-docker compose --profile=activitypub up -d   # Include ActivityPub services
-COMPOSE_PROFILES=analytics,activitypub docker compose up -d  # Start everything
+# Optional profiles
+docker compose --profile=analytics up -d
+docker compose --profile=activitypub up -d
+COMPOSE_PROFILES=analytics,activitypub docker compose up -d
 
-# Tinybird analytics setup (if using analytics profile)
-docker compose run --rm tinybird-login       # Interactive Tinybird login
-docker compose --profile=analytics up tinybird-sync   # Sync datasources/pipes
-docker compose --profile=analytics up tinybird-deploy # Deploy configuration
+# Tinybird setup (analytics profile only)
+docker compose run --rm tinybird-login
+docker compose --profile=analytics up tinybird-sync
+docker compose --profile=analytics up tinybird-deploy
 
-# Development & debugging
-docker compose exec ghost sh            # Access Ghost container shell
-docker compose exec mysql mysql -u root -p  # Access MySQL CLI
+# Debugging
+docker compose exec ghost sh
+docker compose exec db mysql -u root -p
 ```
 
 ## Configuration
 
-All configuration is done via environment variables. Key patterns:
+Deployments on Coolify: set FQDNs and SMTP env vars in the Coolify UI;
+MySQL passwords auto-generate. See [`README.md`](README.md) for the flow.
 
-- **Required variables**: `DOMAIN`, `DATABASE_PASSWORD`, `DATABASE_ROOT_PASSWORD`
-- **Ghost config pattern**: `section__subsection__key=value` (e.g., `mail__options__service=Mailgun`)
-- **Developer experiments**: Must set `labs__publicAPI=true` for analytics/ActivityPub features
-- **Data persistence**: Volumes stored in `./data/ghost` and `./data/mysql`
+Local development without Coolify: set the SERVICE_* vars in `.env`:
 
-### Key configuration files:
-- `.env` - Main environment configuration (create from `.env.example`)
-- `compose.yml` - Docker Compose service definitions
-- `Caddyfile` - Reverse proxy routing configuration
-- `mysql-init/create-multiple-databases.sh` - MySQL multi-database initialization
+```
+SERVICE_URL_GHOST=http://localhost:2368
+SERVICE_USER_MYSQL=ghost
+SERVICE_PASSWORD_MYSQL=localdev
+SERVICE_PASSWORD_MYSQLROOT=localrootdev
+SERVICE_URL_ANALYTICS=http://localhost:3000
+```
+
+Ghost config uses the flattened env-var pattern, e.g. `mail__options__host`,
+`mail__transport=SMTP`. See [Ghost's config docs](https://ghost.org/docs/config/).
+
+### Key files
+- [`compose.yml`](compose.yml) — regenerated nightly from upstream + `patch.py`. Don't edit by hand.
+- [`.github/scripts/patch.py`](.github/scripts/patch.py) — all Coolify edits live here.
+- [`.github/workflows/sync.yml`](.github/workflows/sync.yml) — nightly upstream sync.
+- [`.env.example`](.env.example) — environment template.
+- [`README.coolify.md`](README.coolify.md) — deploy docs; `patch.py` copies this to `README.md`.
+- [`mysql-init/create-multiple-databases.sh`](mysql-init/create-multiple-databases.sh) — creates the `activitypub` database.
 
 ## Migration from Ghost CLI
 
-The repository includes comprehensive migration tools:
+The scripts in [`scripts/`](scripts/) are bare-metal migration tools, not
+intended to run inside Coolify:
 
-- `scripts/migrate.sh` - Main migration script that:
-  - Backs up existing Ghost installation
-  - Automatically tries Ghost's database credentials first
-  - Only prompts for alternative credentials if needed
-  - Uses `--no-tablespaces` flag to avoid PROCESS privilege requirements
-  - Converts config.json to environment variables
-  - Preserves content and database
-  - Creates recovery script with clear restoration instructions
-  - Sets up Docker Compose environment
+- [`scripts/migrate.sh`](scripts/migrate.sh) — backs up a Ghost CLI install,
+  dumps the database with `--no-tablespaces`, converts `config.production.json`
+  to `.env`, and starts the Docker stack.
+- [`scripts/config-to-env.js`](scripts/config-to-env.js) — flattens Ghost's
+  nested JSON config into the `section__subsection__key` env-var pattern.
 
-- `scripts/config-to-env.js` - Converts Ghost JSON config to .env format
+For Coolify migration from an existing Ghost CLI install, run `migrate.sh`
+on the source host to produce an `.env`, then transfer the `.env` + database
+dump + content directory to the Coolify host and deploy normally.
 
-## Development Workflow
+## Daily sync workflow
 
-1. Clone repository and copy `.env.example` to `.env`
-2. Configure required environment variables (domain, passwords)
-3. Run `docker compose up -d` to start services
-4. Access Ghost at `https://DOMAIN` (Caddy handles SSL automatically)
-5. Monitor logs with `docker compose logs -f ghost`
+[`sync.yml`](.github/workflows/sync.yml) runs at 00:00 UTC:
 
-For analytics setup, see `TINYBIRD.md` for detailed instructions.
+1. Clone this fork, back up `.github/` to `/tmp`.
+2. `git reset --hard upstream/main` (TryGhost/ghost-docker).
+3. Restore `.github/` over the reset.
+4. Run `python3 .github/scripts/patch.py` — re-applies Coolify edits.
+5. `docker compose config --quiet` — validates the patched YAML.
+6. `git push --force-with-lease`.
+
+Any hand-edits to `compose.yml`, `caddy/`, `.env.example`, or `README.md`
+will be overwritten nightly. Put durable changes in `patch.py`.
 
 ## Important Notes
 
-- Ghost runs internally on port 2368; Caddy exposes it on 80/443
-- Email configuration is critical even without newsletter features (used for admin notifications)
-- MySQL health checks ensure database is ready before Ghost starts
-- The compose file uses yaml-language-server schema for IDE completion support
-- For production, always use strong passwords and consider additional security measures
+- Ghost pins to `${GHOST_VERSION:-6-alpine}`; Renovate intentionally does
+  not pin this image. Bump `GHOST_VERSION` in Coolify's env UI when needed.
+- MySQL is pinned to `~8.0` (Renovate rule in [`.github/renovate.json5`](.github/renovate.json5)). Required for Ghost 6.
+- Transactional email (`mail__*`) is required for admin invites and
+  password resets — not just newsletters.
+- The patched `compose.yml` depends on Coolify's magic var injection.
+  Running `docker compose up` outside Coolify needs the SERVICE_* vars
+  in `.env` (see Configuration above).
