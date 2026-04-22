@@ -173,6 +173,25 @@ def patch_compose() -> None:
         "activitypub.SERVICE_URL_ACTIVITYPUB_8080",
     )
 
+    # Expose SMTP vars as explicit ${...} refs so Coolify's env scanner
+    # surfaces them in the UI (upstream passes mail via env_file, which
+    # Coolify doesn't scan).
+    c = swap(
+        c,
+        "      tinybird__stats__endpoint: ${TINYBIRD_API_URL:-https://api.tinybird.co}\n"
+        "    volumes:\n",
+        "      tinybird__stats__endpoint: ${TINYBIRD_API_URL:-https://api.tinybird.co}\n"
+        "      mail__transport: ${mail__transport:-SMTP}\n"
+        "      mail__options__host: ${mail__options__host:-}\n"
+        "      mail__options__port: ${mail__options__port:-465}\n"
+        "      mail__options__secure: ${mail__options__secure:-true}\n"
+        "      mail__options__auth__user: ${mail__options__auth__user:-}\n"
+        "      mail__options__auth__pass: ${mail__options__auth__pass:-}\n"
+        "      mail__from: ${mail__from:-}\n"
+        "    volumes:\n",
+        "ghost.mail vars",
+    )
+
     path.write_text(c)
 
 

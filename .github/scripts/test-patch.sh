@@ -37,6 +37,14 @@ grep -q 'SERVICE_URL_ACTIVITYPUB_8080: ""' compose.yml
 echo "→ assert Ghost healthcheck injected"
 grep -q 'localhost:2368/ghost/api/admin/site' compose.yml
 
+echo "→ assert mail vars exposed to Coolify UI"
+# shellcheck disable=SC2016  # literal compose ${...} syntax, no shell expansion wanted
+grep -qF 'mail__transport: ${mail__transport:-SMTP}' compose.yml
+# shellcheck disable=SC2016
+grep -qF 'mail__options__host: ${mail__options__host:-}' compose.yml
+# shellcheck disable=SC2016
+grep -qF 'mail__from: ${mail__from:-}' compose.yml
+
 echo "→ assert ADMIN_DOMAIN kept upstream :+ conditional"
 # shellcheck disable=SC2016  # literal compose syntax, no shell expansion wanted
 grep -qF '${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}' compose.yml

@@ -13,10 +13,11 @@ daily; the Coolify-specific patch lives in
 2. On the `ghost` service, set the primary **Domain (FQDN)** to the URL
    you want (e.g. `https://blog.example.com`). Coolify fills in
    `SERVICE_URL_GHOST` automatically and wires Traefik to port 2368.
-3. Set SMTP env vars on the resource: `mail__options__host`,
-   `mail__options__port`, `mail__options__auth__user`,
-   `mail__options__auth__pass`, `mail__from`. Transactional email is
-   required by Ghost for staff invites and password resets.
+3. Fill in the SMTP rows in the **Environment Variables** tab — the
+   keys (`mail__options__host`, `mail__options__port`,
+   `mail__options__auth__user`, `mail__options__auth__pass`, `mail__from`)
+   are pre-listed. Transactional email is required for staff invites and
+   password resets; Ghost will still boot without it, only those flows fail.
 4. **Deploy**. MySQL credentials generate on first boot via
    `SERVICE_USER_MYSQL` / `SERVICE_PASSWORD_MYSQL` / `SERVICE_PASSWORD_MYSQLROOT` —
    you don't enter them manually.
