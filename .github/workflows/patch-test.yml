@@ -10,6 +10,6 @@ jobs:
   test-patch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Apply patch to upstream + validate + check idempotency
         run: bash .github/scripts/test-patch.sh
