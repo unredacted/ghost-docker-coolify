@@ -132,6 +132,19 @@ def patch_compose() -> None:
         "activitypub.LOCAL_STORAGE_HOSTING_URL",
     )
 
+    # admin_url: Coolify's env-var scanner mis-parses upstream's nested
+    # ${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}} conditional, surfacing a
+    # garbage "ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}" row in the UI.
+    # Replace with a simple ${admin__url:-$SERVICE_URL_GHOST} default so
+    # Coolify sees one clean editable row, and Ghost always gets a valid
+    # URL (falls back to the primary FQDN when admin_url is unset).
+    c = swap(
+        c,
+        "admin__url: ${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}",
+        "admin__url: ${admin__url:-$SERVICE_URL_GHOST}",
+        "admin__url Coolify-friendly",
+    )
+
     # Ghost healthcheck (inserted between env_file and environment)
     ghost_env_anchor = (
         "    # This is required to import current config when migrating\n"

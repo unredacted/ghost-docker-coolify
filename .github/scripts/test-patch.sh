@@ -23,6 +23,13 @@ touch caddy/Caddyfile.example caddy/snippets/Logging .env
 cp "$REPO_ROOT/.github/README.coolify.md" .github/
 cp "$REPO_ROOT/.github/scripts/patch.py" .
 
+assert_absent() {
+  if grep -qE "$1" compose.yml; then
+    echo "unexpected match for /$1/ in compose.yml" >&2
+    exit 1
+  fi
+}
+
 echo "→ run 1: apply patch"
 python3 patch.py
 
@@ -45,16 +52,11 @@ grep -qF 'mail__options__host: ${mail__options__host:-}' compose.yml
 # shellcheck disable=SC2016
 grep -qF 'mail__from: ${mail__from:-}' compose.yml
 
-echo "→ assert ADMIN_DOMAIN kept upstream :+ conditional"
+echo "→ assert admin_url rewritten to Coolify-friendly form"
 # shellcheck disable=SC2016  # literal compose syntax, no shell expansion wanted
-grep -qF '${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}' compose.yml
-
-assert_absent() {
-  if grep -qE "$1" compose.yml; then
-    echo "unexpected match for /$1/ in compose.yml" >&2
-    exit 1
-  fi
-}
+grep -qF 'admin__url: ${admin__url:-$SERVICE_URL_GHOST}' compose.yml
+# Old :+ conditional must be gone (Coolify mis-parses the nested form)
+assert_absent 'ADMIN_DOMAIN:\+'
 
 echo "→ assert DOMAIN and DATABASE_* refs gone from compose.yml"
 assert_absent '\$\{DOMAIN(:[^}]*)?\}'

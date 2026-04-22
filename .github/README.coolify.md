@@ -24,10 +24,11 @@ daily; the Coolify-specific patch lives in
 
 ## Optional: separate admin domain
 
-Set `ADMIN_DOMAIN=admin.example.com` on the resource and add the same value
-as a second FQDN on the `ghost` service in Coolify. Upstream's
-`${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}` expression means Ghost sees
-`admin__url` only when the variable is non-empty.
+Set `admin__url` on the resource to the full admin URL
+(e.g. `https://admin.example.com`) and add the same domain as a second FQDN
+on the `ghost` service in Coolify. When `admin__url` is left empty Ghost
+falls back to the primary URL, so you only need to touch this row if you
+actually want a separate admin host.
 
 ## Optional: analytics (Tinybird)
 
