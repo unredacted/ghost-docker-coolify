@@ -1,25 +1,6 @@
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/compose-spec/compose-spec/main/schema/compose-spec.json
 services:
-  caddy:
-    image: caddy:2.10.2-alpine@sha256:953131cfea8e12bfe1c631a36308e9660e4389f0c3dfb3be957044d3ac92d446
-    restart: always
-    ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-    environment:
-      DOMAIN: ${DOMAIN:?DOMAIN environment variable is required}
-      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-}
-      ACTIVITYPUB_TARGET: ${ACTIVITYPUB_TARGET:-https://ap.ghost.org}
-    volumes:
-      - ./caddy:/etc/caddy
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - ghost
-    networks:
-      - ghost_network
-
   ghost:
     # Do not alter this without updating the Tinybird Sync container as well
     image: ghost:${GHOST_VERSION:-6-alpine}
@@ -27,20 +8,34 @@ services:
     # This is required to import current config when migrating
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -S --max-redirect=0 -T 3 http://localhost:2368/ghost/api/admin/site/ 2>&1 | grep -q 'HTTP/1'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     environment:
       NODE_ENV: production
-      url: https://${DOMAIN:?DOMAIN environment variable is required}
-      admin__url: ${ADMIN_DOMAIN:+https://${ADMIN_DOMAIN}}
+      url: $SERVICE_URL_GHOST
+      SERVICE_URL_GHOST_2368: ""
+      admin__url: ${admin__url:-$SERVICE_URL_GHOST}
       database__client: mysql
       database__connection__host: db
-      database__connection__user: ${DATABASE_USER:-ghost}
-      database__connection__password: ${DATABASE_PASSWORD:?DATABASE_PASSWORD environment variable is required}
+      database__connection__user: $SERVICE_USER_MYSQL
+      database__connection__password: $SERVICE_PASSWORD_MYSQL
       database__connection__database: ghost
-      tinybird__tracker__endpoint: https://${DOMAIN:?DOMAIN environment variable is required}/.ghost/analytics/api/v1/page_hit
+      tinybird__tracker__endpoint: $SERVICE_URL_ANALYTICS/api/v1/page_hit
       tinybird__adminToken: ${TINYBIRD_ADMIN_TOKEN:-}
       tinybird__workspaceId: ${TINYBIRD_WORKSPACE_ID:-}
       tinybird__tracker__datasource: analytics_events
       tinybird__stats__endpoint: ${TINYBIRD_API_URL:-https://api.tinybird.co}
+      mail__transport: ${mail__transport:-SMTP}
+      mail__options__host: ${mail__options__host:-}
+      mail__options__port: ${mail__options__port:-465}
+      mail__options__secure: ${mail__options__secure:-true}
+      mail__options__auth__user: ${mail__options__auth__user:-}
+      mail__options__auth__pass: ${mail__options__auth__pass:-}
+      mail__from: ${mail__from:-}
     volumes:
       - ${UPLOAD_LOCATION:-./data/ghost}:/var/lib/ghost/content
     depends_on:
@@ -64,9 +59,9 @@ services:
     expose:
       - "3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${DATABASE_ROOT_PASSWORD:?DATABASE_ROOT_PASSWORD environment variable is required}
-      MYSQL_USER: ${DATABASE_USER:-ghost}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD environment variable is required}
+      MYSQL_ROOT_PASSWORD: $SERVICE_PASSWORD_MYSQLROOT
+      MYSQL_USER: $SERVICE_USER_MYSQL
+      MYSQL_PASSWORD: $SERVICE_PASSWORD_MYSQL
       MYSQL_DATABASE: ghost
       MYSQL_MULTIPLE_DATABASES: activitypub
     volumes:
@@ -90,6 +85,7 @@ services:
       - traffic_analytics_data:/data
     environment:
       NODE_ENV: production
+      SERVICE_URL_ANALYTICS_3000: ""
       PROXY_TARGET: ${TINYBIRD_API_URL:-https://api.tinybird.co}/v0/events
       SALT_STORE_TYPE: ${SALT_STORE_TYPE:-file}
       SALT_STORE_FILE_PATH: /data/salts.json
@@ -109,12 +105,13 @@ services:
     environment:
       # See https://github.com/TryGhost/ActivityPub/blob/main/docs/env-vars.md
       NODE_ENV: production
+      SERVICE_URL_ACTIVITYPUB_8080: ""
       MYSQL_HOST: db
-      MYSQL_USER: ${DATABASE_USER:-ghost}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD environment variable is required}
+      MYSQL_USER: $SERVICE_USER_MYSQL
+      MYSQL_PASSWORD: $SERVICE_PASSWORD_MYSQL
       MYSQL_DATABASE: activitypub
       LOCAL_STORAGE_PATH: /opt/activitypub/content/images/activitypub
-      LOCAL_STORAGE_HOSTING_URL: https://${DOMAIN}/content/images/activitypub
+      LOCAL_STORAGE_HOSTING_URL: $SERVICE_URL_GHOST/content/images/activitypub
     depends_on:
       db:
         condition: service_healthy
@@ -187,7 +184,7 @@ services:
   activitypub-migrate:
     image: ghcr.io/tryghost/activitypub-migrations:1.2.2@sha256:2af8a0726ac4362cdcab59c308ed612140478d43011ec8d3475bb2634b96d108
     environment:
-      MYSQL_DB: mysql://${DATABASE_USER:-ghost}:${DATABASE_PASSWORD:?DATABASE_PASSWORD environment variable is required}@tcp(db:3306)/activitypub
+      MYSQL_DB: mysql://$SERVICE_USER_MYSQL:$SERVICE_PASSWORD_MYSQL@tcp(db:3306)/activitypub
     networks:
       - ghost_network
     depends_on:
@@ -197,8 +194,6 @@ services:
     restart: no
 
 volumes:
-  caddy_data:
-  caddy_config:
   tinybird_files:
   tinybird_home:
   traffic_analytics_data:
