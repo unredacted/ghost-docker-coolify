@@ -157,12 +157,11 @@ def patch_compose() -> None:
         "    env_file:\n"
         "      - .env\n"
         "    healthcheck:\n"
-        # Ghost redirects http→https when the Host header doesn't match its
-        # configured url, so a naive wget follows back out through Traefik
-        # and dies on setups without hairpin NAT. --max-redirect=0 stops
-        # the follow; we accept any HTTP response line as "Ghost is up".
-        '      test: ["CMD-SHELL", "wget --spider -S --max-redirect=0 -T 3 '
-        "http://localhost:2368/ghost/api/admin/site/ 2>&1 | grep -q 'HTTP/1'\"]\n"
+        # TCP port check. BusyBox (Alpine) wget doesn't support
+        # --max-redirect, so the HTTP-response approach fails; nc -z is
+        # universally available and answers the only question that matters
+        # for readiness: is Ghost listening on 2368?
+        '      test: ["CMD", "nc", "-z", "localhost", "2368"]\n'
         "      interval: 30s\n"
         "      timeout: 5s\n"
         "      retries: 5\n"

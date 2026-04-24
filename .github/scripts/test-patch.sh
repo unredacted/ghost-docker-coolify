@@ -43,7 +43,7 @@ grep -q 'SERVICE_URL_ANALYTICS_3000: ""' compose.yml
 grep -q 'SERVICE_URL_ACTIVITYPUB_8080: ""' compose.yml
 
 echo "→ assert Ghost healthcheck injected"
-grep -q 'localhost:2368/ghost/api/admin/site' compose.yml
+grep -q '"nc", "-z", "localhost", "2368"' compose.yml
 
 echo "→ assert mail vars exposed to Coolify UI"
 # shellcheck disable=SC2016  # literal compose ${...} syntax, no shell expansion wanted
