@@ -21,6 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/TryGhost/ghost-docker/main/.env.exa
 mkdir -p caddy/snippets .github
 touch caddy/Caddyfile.example caddy/snippets/Logging .env
 cp "$REPO_ROOT/.github/README.coolify.md" .github/
+cp "$REPO_ROOT/.github/CLAUDE.coolify.md" .github/
 cp "$REPO_ROOT/.github/scripts/patch.py" .
 
 echo "→ run 1: apply patch"
@@ -67,6 +68,9 @@ echo "→ assert caddy/ deleted"
 
 echo "→ assert README.md overwritten with Coolify content"
 head -1 README.md | grep -q 'Ghost on Coolify'
+
+echo "→ assert CLAUDE.md overwritten with Coolify content"
+grep -q 'Coolify' CLAUDE.md
 
 echo "→ run 2: idempotency"
 cp compose.yml compose.r1.yml

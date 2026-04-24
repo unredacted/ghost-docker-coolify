@@ -235,18 +235,19 @@ def patch_env_example() -> None:
     path.write_text(e)
 
 
-def overwrite_readme() -> None:
-    src = pathlib.Path(".github/README.coolify.md")
+def _overwrite_from_github(src_rel: str, dst_rel: str) -> None:
+    src = pathlib.Path(src_rel)
     if not src.exists():
         fail(f"{src} missing — the sync workflow should back it up under .github/")
-    pathlib.Path("README.md").write_text(src.read_text())
+    pathlib.Path(dst_rel).write_text(src.read_text())
 
 
 def main() -> None:
     patch_compose()
     shutil.rmtree("caddy", ignore_errors=True)
     patch_env_example()
-    overwrite_readme()
+    _overwrite_from_github(".github/README.coolify.md", "README.md")
+    _overwrite_from_github(".github/CLAUDE.coolify.md", "CLAUDE.md")
     print("Patched compose.yml successfully")
 
 
