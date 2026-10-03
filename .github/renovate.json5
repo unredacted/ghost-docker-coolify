@@ -8,6 +8,19 @@
 		":separatePatchReleases",
 	],
 	suppressNotifications: ["prIgnoreNotification"],
+	customManagers: [
+		{
+			// Bump GHOST_VERSION in .env.example when the user pins an explicit tag.
+			// The line is commented by default; this only fires once uncommented.
+			customType: "regex",
+			fileMatch: ["^\\.env\\.example$"],
+			matchStrings: [
+				"^GHOST_VERSION=(?<currentValue>\\S+)\\s*$",
+			],
+			datasourceTemplate: "docker",
+			depNameTemplate: "ghost",
+		},
+	],
 	packageRules: [
 		{
 			description: "Group ActivityPub containers together",
