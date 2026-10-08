@@ -1,0 +1,15 @@
+name: Test patch.py
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Apply patch to upstream + validate + check idempotency
+        run: bash .github/scripts/test-patch.sh
